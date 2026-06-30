@@ -1,0 +1,292 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.admin_commands (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  target_agent text NOT NULL,
+  command text NOT NULL,
+  response text,
+  broadcast boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admin_commands_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.admin_logs (
+  id bigint NOT NULL DEFAULT nextval('admin_logs_id_seq'::regclass),
+  created_at timestamp with time zone DEFAULT now(),
+  email text,
+  ip_address text,
+  user_agent text,
+  success boolean DEFAULT false,
+  note text DEFAULT ''::text,
+  CONSTRAINT admin_logs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.agent_memory (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  agent_id text NOT NULL UNIQUE,
+  knowledge_base text DEFAULT ''::text,
+  student_patterns jsonb DEFAULT '{}'::jsonb,
+  total_interactions integer DEFAULT 0,
+  skill_extensions text DEFAULT ''::text,
+  system_prompt text DEFAULT ''::text,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT agent_memory_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.agent_messages (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  from_agent text NOT NULL,
+  to_agent text NOT NULL,
+  content text NOT NULL,
+  message_type text DEFAULT 'info'::text,
+  read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT agent_messages_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.bot_banned (
+  tg_user_id bigint NOT NULL,
+  tg_username text,
+  reason text,
+  banned_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT bot_banned_pkey PRIMARY KEY (tg_user_id)
+);
+CREATE TABLE public.bot_knowledge (
+  id bigint NOT NULL DEFAULT nextval('bot_knowledge_id_seq'::regclass),
+  fact text NOT NULL,
+  topic text DEFAULT 'general'::text,
+  added_by bigint,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT bot_knowledge_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.bot_lingo (
+  id bigint NOT NULL DEFAULT nextval('bot_lingo_id_seq'::regclass),
+  phrase text NOT NULL,
+  meaning text,
+  usage_count integer DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT bot_lingo_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.bot_logs (
+  id bigint NOT NULL DEFAULT nextval('bot_logs_id_seq'::regclass),
+  tg_user_id bigint NOT NULL,
+  tg_username text,
+  full_name text,
+  message text NOT NULL,
+  response text,
+  chat_id bigint,
+  chat_type text DEFAULT 'group'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT bot_logs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.chat_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  role text NOT NULL,
+  content text NOT NULL,
+  image_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT chat_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_messages_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.chat_sessions(id),
+  CONSTRAINT chat_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.chat_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title text DEFAULT 'New Chat'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT chat_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.conversations (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  student_id uuid,
+  agent_id text NOT NULL DEFAULT 'aria'::text,
+  mode text DEFAULT 'standard'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT conversations_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
+CREATE TABLE public.courses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text NOT NULL DEFAULT ''::text,
+  subject text NOT NULL DEFAULT 'General'::text,
+  level text NOT NULL DEFAULT 'Beginner'::text,
+  duration text NOT NULL DEFAULT ''::text,
+  icon text NOT NULL DEFAULT '📚'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT courses_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.flashcards (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  front text NOT NULL,
+  back text NOT NULL,
+  category text NOT NULL DEFAULT 'General'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT flashcards_pkey PRIMARY KEY (id),
+  CONSTRAINT flashcards_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.institutional_knowledge (
+  id bigint NOT NULL DEFAULT nextval('institutional_knowledge_id_seq'::regclass),
+  category text NOT NULL,
+  title text,
+  content text NOT NULL,
+  embedding USER-DEFINED,
+  source text DEFAULT 'manual'::text,
+  verified boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT institutional_knowledge_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.knowledge_chunks (
+  id bigint NOT NULL DEFAULT nextval('knowledge_chunks_id_seq'::regclass),
+  content text NOT NULL,
+  embedding USER-DEFINED,
+  category text DEFAULT 'general'::text,
+  source text,
+  subject text,
+  verified boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT knowledge_chunks_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.messages (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  conversation_id uuid,
+  student_id uuid,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'agent'::text, 'system'::text])),
+  content text NOT NULL,
+  agent_id text DEFAULT 'aria'::text,
+  mode text DEFAULT 'standard'::text,
+  has_attachment boolean DEFAULT false,
+  attachment_urls ARRAY,
+  tokens_used integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT messages_pkey PRIMARY KEY (id),
+  CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id),
+  CONSTRAINT messages_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  full_name text DEFAULT ''::text,
+  is_admin boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.quiz_attempts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  subject text NOT NULL,
+  question_id text NOT NULL,
+  correct boolean NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT quiz_attempts_pkey PRIMARY KEY (id),
+  CONSTRAINT quiz_attempts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.quiz_questions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subject text NOT NULL DEFAULT 'General'::text,
+  question text NOT NULL,
+  opt_a text NOT NULL DEFAULT ''::text,
+  opt_b text NOT NULL DEFAULT ''::text,
+  opt_c text NOT NULL DEFAULT ''::text,
+  opt_d text NOT NULL DEFAULT ''::text,
+  correct_opt integer NOT NULL DEFAULT 0 CHECK (correct_opt >= 0 AND correct_opt <= 3),
+  explanation text NOT NULL DEFAULT ''::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT quiz_questions_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.sentinel_intel (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  source text NOT NULL,
+  category text DEFAULT 'general'::text,
+  title text,
+  content text NOT NULL,
+  url text,
+  scraped_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT sentinel_intel_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.sessions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  student_id uuid,
+  token text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone DEFAULT (now() + '30 days'::interval),
+  CONSTRAINT sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT sessions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
+CREATE TABLE public.student_memory (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  student_id uuid UNIQUE,
+  weak_areas ARRAY DEFAULT '{}'::text[],
+  strong_areas ARRAY DEFAULT '{}'::text[],
+  interaction_count integer DEFAULT 0,
+  total_messages integer DEFAULT 0,
+  preferred_mode text DEFAULT 'standard'::text,
+  psychology_notes text DEFAULT ''::text,
+  last_topics ARRAY DEFAULT '{}'::text[],
+  progress_score integer DEFAULT 0,
+  notes text DEFAULT ''::text,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT student_memory_pkey PRIMARY KEY (id),
+  CONSTRAINT student_memory_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
+CREATE TABLE public.students (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  uni_id text UNIQUE,
+  mobile text UNIQUE,
+  password_hash text NOT NULL,
+  full_name text NOT NULL,
+  year integer DEFAULT 1,
+  term integer DEFAULT 2,
+  is_banned boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  last_seen timestamp with time zone DEFAULT now(),
+  telegram_id text UNIQUE,
+  daily_msg_count integer DEFAULT 0,
+  last_msg_date text,
+  is_paid boolean DEFAULT false,
+  CONSTRAINT students_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.system_logs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  level text DEFAULT 'info'::text CHECK (level = ANY (ARRAY['info'::text, 'warn'::text, 'error'::text, 'success'::text])),
+  source text DEFAULT 'server'::text,
+  message text NOT NULL,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT system_logs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.user_memory (
+  user_id uuid NOT NULL,
+  memory_text text DEFAULT ''::text,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_memory_pkey PRIMARY KEY (user_id),
+  CONSTRAINT user_memory_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.user_progress (
+  user_id uuid NOT NULL,
+  quizzes_completed integer DEFAULT 0,
+  quizzes_total integer DEFAULT 20,
+  flashcards_reviewed integer DEFAULT 0,
+  flashcards_total integer DEFAULT 40,
+  topics_visited ARRAY DEFAULT '{}'::text[],
+  topics_total integer DEFAULT 16,
+  overall_percent integer DEFAULT 0,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_progress_pkey PRIMARY KEY (user_id),
+  CONSTRAINT user_progress_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.videos (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text NOT NULL DEFAULT ''::text,
+  subject text NOT NULL DEFAULT 'General'::text,
+  url text NOT NULL DEFAULT ''::text,
+  duration text NOT NULL DEFAULT ''::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT videos_pkey PRIMARY KEY (id)
+);
