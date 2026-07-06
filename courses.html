@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' fonts.googleapis.com cdn.jsdelivr.net; font-src fonts.gstatic.com cdn.jsdelivr.net data:; script-src 'unsafe-inline'; img-src data:; connect-src 'self' https://ajhbaomxdsvnegjiypob.supabase.co;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' fonts.googleapis.com cdn.jsdelivr.net; font-src fonts.gstatic.com cdn.jsdelivr.net data:; script-src 'unsafe-inline' https://cdn.jsdelivr.net; img-src data:; connect-src 'self' https://ajhbaomxdsvnegjiypob.supabase.co;" />
   <meta name="referrer" content="no-referrer" />
 </head>
 <body>
@@ -275,10 +275,13 @@
     // ─── SUPABASE HELPERS ─────────────────────────────────────
     async function fetchCourses() {
       try {
+        if (!window.supabase) {
+          console.warn('Supabase not available, using defaults');
+          return null;
+        }
         const { data, error } = await supabase.from('courses').select('*');
         if (error) throw error;
         if (data && data.length > 0) {
-          // Merge with local progress data
           return data.map(c => ({
             ...c,
             tags: c.tags || [],
@@ -293,30 +296,32 @@
     }
 
     function getCourseProgress(courseId) {
-      // Check localStorage first
-      const saved = localStorage.getItem('edumoe-progress');
-      if (saved) {
-        const progress = JSON.parse(saved);
-        if (progress[courseId] !== undefined) return progress[courseId];
-      }
-      // Fallback to default
+      try {
+        const saved = localStorage.getItem('edumoe-progress');
+        if (saved) {
+          const progress = JSON.parse(saved);
+          if (progress[courseId] !== undefined) return progress[courseId];
+        }
+      } catch (e) { /* ignore */ }
       const def = DEFAULT_COURSES.find(c => c.id === courseId);
       return def ? def.progress : 0;
     }
 
     function saveCourseProgress(courseId, progress) {
-      const saved = localStorage.getItem('edumoe-progress');
-      const all = saved ? JSON.parse(saved) : {};
-      all[courseId] = Math.min(100, Math.max(0, progress));
-      localStorage.setItem('edumoe-progress', JSON.stringify(all));
-      // If user is logged in, also update Supabase
-      updateSupabaseProgress(courseId, progress);
+      try {
+        const saved = localStorage.getItem('edumoe-progress');
+        const all = saved ? JSON.parse(saved) : {};
+        all[courseId] = Math.min(100, Math.max(0, progress));
+        localStorage.setItem('edumoe-progress', JSON.stringify(all));
+        updateSupabaseProgress(courseId, progress);
+      } catch (e) { /* ignore */ }
     }
 
     async function updateSupabaseProgress(courseId, progress) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
       try {
+        if (!window.supabase) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
         const { error } = await supabase.from('user_progress').upsert({
           user_id: session.user.id,
           [courseId]: progress,
@@ -333,7 +338,8 @@
       const total = courses.length;
       const completed = courses.filter(c => c.progress >= 100).length;
       const overall = total > 0 ? Math.round((completed / total) * 100) : 0;
-      document.getElementById('overallProgress').textContent = `${overall}% complete`;
+      const overallEl = document.getElementById('overallProgress');
+      if (overallEl) overallEl.textContent = `${overall}% complete`;
 
       container.innerHTML = courses.map((c, i) => `
         <div class="path-step ${c.progress >= 100 ? 'done' : ''}">
@@ -399,98 +405,119 @@
 
     // ─── VIDEO FUNCTIONS ──────────────────────────────────────
     function switchVideo(courseId, source, btn) {
-      const tabs = btn.closest('.video-source-tabs');
-      tabs.querySelectorAll('.vsrc-tab').forEach(t => t.classList.remove('active'));
-      btn.classList.add('active');
-      const area = document.getElementById(`video-${courseId}`);
-      if (!area) return;
-      // Reset to placeholder
-      const course = courses.find(c => c.id === courseId);
-      if (!course) return;
-      area.innerHTML = `
-        <div class="video-placeholder" onclick="loadVideo('${courseId}','${source}')">
-          <i class="fas fa-play-circle"></i>
-          <span>Click to load: ${course.title}</span>
-        </div>
-        <span class="video-type-badge ${source === 'yt' ? 'vbadge-yt' : 'vbadge-tg'}">${source === 'yt' ? 'YouTube' : 'Telegram'}</span>
-      `;
+      try {
+        const tabs = btn.closest('.video-source-tabs');
+        if (tabs) {
+          tabs.querySelectorAll('.vsrc-tab').forEach(t => t.classList.remove('active'));
+          btn.classList.add('active');
+        }
+        const area = document.getElementById(`video-${courseId}`);
+        if (!area) return;
+        const course = courses.find(c => c.id === courseId);
+        if (!course) return;
+        area.innerHTML = `
+          <div class="video-placeholder" onclick="loadVideo('${courseId}','${source}')">
+            <i class="fas fa-play-circle"></i>
+            <span>Click to load: ${course.title}</span>
+          </div>
+          <span class="video-type-badge ${source === 'yt' ? 'vbadge-yt' : 'vbadge-tg'}">${source === 'yt' ? 'YouTube' : 'Telegram'}</span>
+        `;
+      } catch (e) { /* ignore */ }
     }
 
     function loadVideo(courseId, source) {
-      const area = document.getElementById(`video-${courseId}`);
-      if (!area) return;
-      const course = courses.find(c => c.id === courseId);
-      if (!course) return;
+      try {
+        const area = document.getElementById(`video-${courseId}`);
+        if (!area) return;
+        const course = courses.find(c => c.id === courseId);
+        if (!course) return;
 
-      if (source === 'yt' && course.youtube_id) {
-        area.innerHTML = `
-          <iframe src="https://www.youtube.com/embed/${course.youtube_id}?autoplay=1&rel=0" allowfullscreen allow="autoplay"></iframe>
-        `;
-      } else if (source === 'tg' && course.telegram_url) {
-        // Telegram: open in new tab since iframe embedding is limited
-        window.open(course.telegram_url, '_blank');
-        showToast('📱 Opening Telegram video...');
-        // Keep placeholder
-      } else {
-        showToast('⚠️ No video available for this source.');
-      }
+        if (source === 'yt' && course.youtube_id) {
+          area.innerHTML = `
+            <iframe src="https://www.youtube.com/embed/${course.youtube_id}?autoplay=1&rel=0" allowfullscreen allow="autoplay"></iframe>
+          `;
+        } else if (source === 'tg' && course.telegram_url) {
+          window.open(course.telegram_url, '_blank');
+          showToast('📱 Opening Telegram video...');
+        } else {
+          showToast('⚠️ No video available for this source.');
+        }
+      } catch (e) { /* ignore */ }
     }
 
     // ─── PROGRESS FUNCTIONS ──────────────────────────────────
     function updateProgress(courseId) {
-      const course = courses.find(c => c.id === courseId);
-      if (!course) return;
-      const newProgress = Math.min(100, course.progress + 5);
-      course.progress = newProgress;
-      saveCourseProgress(courseId, newProgress);
-      renderCourses();
-      renderLearningPath();
-      showToast(`📈 ${course.title} progress: ${newProgress}%`);
+      try {
+        const course = courses.find(c => c.id === courseId);
+        if (!course) return;
+        const newProgress = Math.min(100, course.progress + 5);
+        course.progress = newProgress;
+        saveCourseProgress(courseId, newProgress);
+        renderCourses();
+        renderLearningPath();
+        showToast(`📈 ${course.title} progress: ${newProgress}%`);
+      } catch (e) { /* ignore */ }
     }
 
     // ─── FILTER FUNCTIONS ──────────────────────────────────────
     function initFilters() {
-      document.querySelectorAll('.filter-tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-          document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-          this.classList.add('active');
-          currentFilter = this.dataset.filter;
-          renderCourses();
+      try {
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+          tab.addEventListener('click', function() {
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            currentFilter = this.dataset.filter;
+            renderCourses();
+          });
         });
-      });
+      } catch (e) { /* ignore */ }
     }
 
     // ─── INIT ──────────────────────────────────────────────────
     async function initCourses() {
-      // Load courses
-      const supabaseData = await fetchCourses();
-      if (supabaseData) {
-        courses = supabaseData.map(c => ({
-          ...c,
-          // Ensure progress is loaded from localStorage
-          progress: getCourseProgress(c.id)
-        }));
-      } else {
+      try {
+        // Wait for app.js to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Load courses
+        const supabaseData = await fetchCourses();
+        if (supabaseData && supabaseData.length > 0) {
+          courses = supabaseData;
+        } else {
+          courses = DEFAULT_COURSES.map(c => ({
+            ...c,
+            progress: getCourseProgress(c.id)
+          }));
+        }
+
+        renderLearningPath();
+        renderCourses();
+        initFilters();
+
+        // Update tab bar active state
+        document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+        const activeTab = document.querySelector('.tab-item[href="courses.html"]');
+        if (activeTab) activeTab.classList.add('active');
+      } catch (e) {
+        console.warn('Courses init error:', e.message);
+        // Fallback: render defaults
         courses = DEFAULT_COURSES.map(c => ({
           ...c,
           progress: getCourseProgress(c.id)
         }));
+        renderLearningPath();
+        renderCourses();
       }
-
-      renderLearningPath();
-      renderCourses();
-      initFilters();
-
-      // Update tab bar active state
-      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
-      document.querySelector('.tab-item[href="courses.html"]')?.classList.add('active');
     }
 
     // Run on load
-    document.addEventListener('DOMContentLoaded', () => {
-      // Wait for shared init to finish
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initCourses, 300);
+      });
+    } else {
       setTimeout(initCourses, 300);
-    });
+    }
 
     // ─── EXPOSE GLOBAL FUNCTIONS ──────────────────────────────
     window.updateProgress = updateProgress;
