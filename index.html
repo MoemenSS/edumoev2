@@ -12,6 +12,23 @@
   <link rel="stylesheet" href="style.css" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' fonts.googleapis.com cdn.jsdelivr.net; font-src fonts.gstatic.com cdn.jsdelivr.net data:; script-src 'unsafe-inline' https://cdn.jsdelivr.net; img-src data:; connect-src 'self' https://ajhbaomxdsvnegjiypob.supabase.co;" />
   <meta name="referrer" content="no-referrer" />
+  <!-- Backup loader hide: in case JS fails completely -->
+  <script>
+    // This runs immediately and ensures loader disappears
+    (function() {
+      try {
+        const loader = document.getElementById('loader');
+        if (loader) {
+          setTimeout(function() {
+            loader.classList.add('out');
+            setTimeout(function() {
+              loader.style.display = 'none';
+            }, 500);
+          }, 3000);
+        }
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
 
@@ -243,7 +260,6 @@
   <div class="toast" id="toast"><span id="toast-msg"></span></div>
 
   <!-- ─── SCRIPTS ────────────────────────────────────────────────── -->
-  <!-- Load Supabase first, then app.js -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
