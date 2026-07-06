@@ -1,24 +1,26 @@
 /* ============================================================
-   EDUMOE V2 — SHARED JAVASCRIPT (FIXED)
-   All pages use this file.
+   EDUMOE V2 — SHARED JAVASCRIPT
+   Guaranteed loader hiding · Error resilient
    ============================================================ */
 
-// ─── SAFE DOM HELPERS ──────────────────────────────────────────
-function getEl(id) {
-  const el = document.getElementById(id);
-  if (!el) console.warn(`Element #${id} not found`);
-  return el;
-}
-
-function qs(selector, context = document) {
-  const el = context.querySelector(selector);
-  if (!el) console.warn(`Selector "${selector}" not found`);
-  return el;
-}
-
-function qsa(selector, context = document) {
-  return context.querySelectorAll(selector) || [];
-}
+// ─── IMMEDIATE LOADER HIDE (fallback) ─────────────────────────
+// This ensures the loader is hidden even if the rest of the JS fails
+(function hideLoader() {
+  try {
+    const loader = document.getElementById('loader');
+    if (loader) {
+      // Hide after max 3 seconds regardless
+      setTimeout(() => {
+        if (loader && !loader.classList.contains('out')) {
+          loader.classList.add('out');
+          setTimeout(() => {
+            if (loader) loader.style.display = 'none';
+          }, 500);
+        }
+      }, 3000);
+    }
+  } catch (e) { /* ignore */ }
+})();
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────
 const SUPABASE_URL = 'https://ajhbaomxdsvnegjiypob.supabase.co';
@@ -36,13 +38,23 @@ try {
   console.warn('⚠️ Supabase init error:', e.message);
 }
 
+// ─── SAFE DOM HELPERS ──────────────────────────────────────────
+function getEl(id) {
+  return document.getElementById(id);
+}
+
+function qs(selector, context = document) {
+  return context.querySelector(selector);
+}
+
+function qsa(selector, context = document) {
+  return context.querySelectorAll(selector) || [];
+}
+
 // ─── CANVAS BACKGROUND ──────────────────────────────────────
 function initBackground() {
-  const canvas = document.getElementById('bg-canvas');
-  if (!canvas) {
-    console.warn('⚠️ Canvas not found, skipping background');
-    return;
-  }
+  const canvas = getEl('bg-canvas');
+  if (!canvas) return;
 
   try {
     canvas.width = window.innerWidth;
@@ -68,7 +80,7 @@ function initBackground() {
     ];
 
     const particles = [];
-    for (let i = 0; i < 120; i++) { // reduced for performance
+    for (let i = 0; i < 120; i++) {
       particles.push({
         text: texts[Math.floor(Math.random() * texts.length)],
         x: Math.random() * canvas.width,
@@ -90,8 +102,6 @@ function initBackground() {
       mouseX = -9999;
       mouseY = -9999;
     });
-
-    let animationId = null;
 
     function draw() {
       try {
@@ -116,14 +126,9 @@ function initBackground() {
           ctx.fillStyle = `rgba(100, 100, 150, ${p.alpha})`;
           ctx.fillText(p.text, p.x, p.y);
         }
-      } catch (e) {
-        // Silent fail for canvas rendering issues
-      }
-      animationId = requestAnimationFrame(draw);
+      } catch (e) { /* ignore */ }
+      requestAnimationFrame(draw);
     }
-
-    // Start animation
-    if (animationId) cancelAnimationFrame(animationId);
     draw();
 
     window.addEventListener('resize', () => {
@@ -131,7 +136,7 @@ function initBackground() {
       canvas.height = window.innerHeight;
     });
   } catch (e) {
-    console.warn('⚠️ Canvas init error:', e.message);
+    console.warn('Canvas init error:', e.message);
   }
 }
 
@@ -140,8 +145,8 @@ function setTheme(theme, el) {
   try {
     if (theme === 'ruby') {
       document.documentElement.removeAttribute('data-theme');
-      const picker = document.getElementById('customColorPicker');
-      const wrap = document.getElementById('customColorWrap');
+      const picker = getEl('customColorPicker');
+      const wrap = getEl('customColorWrap');
       if (picker) picker.value = '#e11d48';
       if (wrap) wrap.style.background = '#e11d48';
       localStorage.removeItem('edumoe-custom-color');
@@ -152,8 +157,8 @@ function setTheme(theme, el) {
       localStorage.setItem('edumoe-theme', theme);
       const colorMap = { lava: '#ff5a1f', space: '#7c3aed', oxford: '#00d4ff', light: '#111111' };
       if (colorMap[theme]) {
-        const picker = document.getElementById('customColorPicker');
-        const wrap = document.getElementById('customColorWrap');
+        const picker = getEl('customColorPicker');
+        const wrap = getEl('customColorWrap');
         if (picker) picker.value = colorMap[theme];
         if (wrap) wrap.style.background = colorMap[theme];
       }
@@ -177,7 +182,6 @@ function setCustomTheme(color) {
     document.documentElement.setAttribute('data-theme', 'custom');
     const root = document.documentElement;
 
-    // Set all custom properties
     const props = {
       '--custom-accent': color,
       '--custom-accent2': `rgb(${Math.min(r+40,255)}, ${Math.min(g+40,255)}, ${Math.min(b+40,255)})`,
@@ -195,7 +199,7 @@ function setCustomTheme(color) {
       root.style.setProperty(key, value);
     });
 
-    // Update orb backgrounds
+    // Update orbs
     document.querySelectorAll('.bg-orb-1').forEach(el => {
       el.style.background = `radial-gradient(circle, rgba(${r},${g},${b},0.18) 0%, transparent 70%)`;
     });
@@ -206,11 +210,9 @@ function setCustomTheme(color) {
       el.style.background = `radial-gradient(circle, rgba(${Math.min(r+80,255)},${Math.min(g+80,255)},${Math.min(b+80,255)},0.10) 0%, transparent 70%)`;
     });
 
-    // Update custom color wrap
-    const wrap = document.getElementById('customColorWrap');
+    const wrap = getEl('customColorWrap');
     if (wrap) wrap.style.background = color;
 
-    // Update gradient elements
     document.querySelectorAll('.btn-fire, .nav-cta, .nav-logo-mark, .m-btn-fire, .feature-icon')
       .forEach(el => {
         el.style.background =
@@ -255,25 +257,20 @@ let toastTimer = null;
 
 function showToast(msg) {
   try {
-    const t = document.getElementById('toast');
-    const m = document.getElementById('toast-msg');
+    const t = getEl('toast');
+    const m = getEl('toast-msg');
     if (!t || !m) return;
     m.textContent = msg;
     t.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
-  } catch (e) {
-    console.warn('Toast error:', e.message);
-  }
+  } catch (e) { /* ignore */ }
 }
 
 // ─── ORBIT ANIMATION ───────────────────────────────────────────
 function initOrbits() {
-  const container = document.getElementById('orbitContainer');
-  if (!container) {
-    console.warn('⚠️ Orbit container not found');
-    return;
-  }
+  const container = getEl('orbitContainer');
+  if (!container) return;
 
   const windows = [{
     title: "ode.math",
@@ -381,9 +378,7 @@ function initOrbits() {
         win.element.style.left = `${x - (win.size === 'large' ? 85 : 65)}px`;
         win.element.style.top = `${y - 50}px`;
       });
-    } catch (e) {
-      // Silent fail for orbit animation
-    }
+    } catch (e) { /* ignore */ }
     requestAnimationFrame(animate);
   }
 
@@ -394,7 +389,7 @@ function initOrbits() {
 
 // ─── STATS COUNTER ─────────────────────────────────────────────
 function animateStats() {
-  const el = document.getElementById('stat-students');
+  const el = getEl('stat-students');
   if (!el) return;
   let count = 0;
   const target = 230;
@@ -417,47 +412,42 @@ function restoreTheme() {
 
     if (savedTheme === 'custom' && savedColor) {
       setCustomTheme(savedColor);
-      const picker = document.getElementById('customColorPicker');
-      const wrap = document.getElementById('customColorWrap');
+      const picker = getEl('customColorPicker');
+      const wrap = getEl('customColorWrap');
       if (picker) picker.value = savedColor;
       if (wrap) wrap.style.background = savedColor;
     } else if (savedTheme !== 'ruby') {
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
 
-    // Set active theme dot on DOM ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', applyThemeDot);
     } else {
       applyThemeDot();
     }
-  } catch (e) {
-    console.warn('Theme restore error:', e.message);
-  }
+  } catch (e) { /* ignore */ }
 }
 
 function applyThemeDot() {
   try {
     const savedTheme = localStorage.getItem('edumoe-theme') || 'ruby';
     if (savedTheme === 'custom') {
-      const wrap = document.getElementById('customColorWrap');
+      const wrap = getEl('customColorWrap');
       if (wrap) wrap.style.boxShadow = `0 0 0 2px var(--bg1), 0 0 0 4px var(--txt1)`;
     } else {
-      const dot = document.getElementById('td-' + savedTheme);
+      const dot = getEl('td-' + savedTheme);
       if (dot) dot.classList.add('active');
       else {
-        const ruby = document.getElementById('td-ruby');
+        const ruby = getEl('td-ruby');
         if (ruby) ruby.classList.add('active');
       }
     }
-  } catch (e) {
-    // Silent fail
-  }
+  } catch (e) { /* ignore */ }
 }
 
 // ─── CUSTOM COLOR PICKER ──────────────────────────────────────
 function initColorPicker() {
-  const picker = document.getElementById('customColorPicker');
+  const picker = getEl('customColorPicker');
   if (!picker) return;
   picker.addEventListener('input', function(e) {
     try {
@@ -465,12 +455,10 @@ function initColorPicker() {
       setCustomTheme(color);
       localStorage.setItem('edumoe-custom-color', color);
       document.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
-      const wrap = document.getElementById('customColorWrap');
+      const wrap = getEl('customColorWrap');
       if (wrap) wrap.style.boxShadow = `0 0 0 2px var(--bg1), 0 0 0 4px var(--txt1)`;
       showToast('🎨 Custom color applied!');
-    } catch (err) {
-      console.warn('Color picker error:', err.message);
-    }
+    } catch (err) { /* ignore */ }
   });
 }
 
@@ -479,19 +467,14 @@ function initTabBar() {
   try {
     document.querySelectorAll('.tab-item').forEach(tab => {
       tab.addEventListener('click', function(e) {
-        // Only prevent default if it's a # link
-        if (this.getAttribute('href') === '#') {
-          e.preventDefault();
-        }
+        if (this.getAttribute('href') === '#') e.preventDefault();
         document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
         this.classList.add('active');
         const label = this.querySelector('span')?.textContent || 'Page';
         showToast(`📱 ${label}`);
       });
     });
-  } catch (e) {
-    console.warn('Tab bar init error:', e.message);
-  }
+  } catch (e) { /* ignore */ }
 }
 
 // ─── MODALS ────────────────────────────────────────────────────
@@ -502,52 +485,15 @@ function initModals() {
         e.target.classList.remove('open');
       }
     });
-  } catch (e) {
-    console.warn('Modal init error:', e.message);
-  }
+  } catch (e) { /* ignore */ }
 }
 
 // ─── FOOTER YEAR ──────────────────────────────────────────────
 function setFooterYear() {
   try {
-    const el = document.getElementById('yr');
+    const el = getEl('yr');
     if (el) el.textContent = new Date().getFullYear();
-  } catch (e) {
-    // Silent fail
-  }
-}
-
-// ─── LOADER ────────────────────────────────────────────────────
-function initLoader() {
-  try {
-    const loader = document.getElementById('loader');
-    if (!loader) return;
-
-    // Start the loader animation
-    setTimeout(() => {
-      loader.classList.add('out');
-      setTimeout(() => {
-        loader.style.display = 'none';
-      }, 500);
-    }, 800);
-
-    // Initialize orbit after loader
-    setTimeout(() => {
-      initOrbits();
-      animateStats();
-      // Set active tab
-      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
-      const firstTab = document.querySelector('.tab-item:first-child');
-      if (firstTab) firstTab.classList.add('active');
-    }, 900);
-  } catch (e) {
-    console.warn('Loader error:', e.message);
-    // Hide loader anyway
-    const loader = document.getElementById('loader');
-    if (loader) {
-      loader.style.display = 'none';
-    }
-  }
+  } catch (e) { /* ignore */ }
 }
 
 // ─── NAVIGATION ACTIVE STATE ──────────────────────────────────
@@ -562,9 +508,7 @@ function initNav() {
         link.classList.remove('active');
       }
     });
-  } catch (e) {
-    // Silent fail
-  }
+  } catch (e) { /* ignore */ }
 }
 
 // ─── PAGE INIT ────────────────────────────────────────────────
@@ -578,15 +522,20 @@ function initPage() {
     initTabBar();
     initModals();
     setFooterYear();
-    initLoader();
+
+    // Start orbit and stats after a short delay
+    setTimeout(() => {
+      initOrbits();
+      animateStats();
+      // Set active tab
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      const firstTab = document.querySelector('.tab-item:first-child');
+      if (firstTab) firstTab.classList.add('active');
+    }, 100);
+
     console.log('✅ EDUMOE initialized successfully');
   } catch (e) {
     console.error('❌ EDUMOE init error:', e.message);
-    // Hide loader if stuck
-    const loader = document.getElementById('loader');
-    if (loader) {
-      loader.style.display = 'none';
-    }
   }
 }
 
@@ -599,16 +548,10 @@ window.initOrbits = initOrbits;
 window.animateStats = animateStats;
 window.initPage = initPage;
 
-// Auto-init if DOM is ready
+// ─── AUTO-INIT ──────────────────────────────────────────────────
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initPage);
 } else {
-  // DOM already ready
+  // DOM already ready – run after a tiny delay to let other scripts load
   setTimeout(initPage, 50);
-}
-
-// Also handle cases where the page is fully loaded but scripts ran before DOM
-if (document.readyState === 'complete') {
-  // Already loaded, ensure init runs
-  setTimeout(initPage, 100);
 }
